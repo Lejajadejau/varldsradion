@@ -1,0 +1,48 @@
+name: Hämta poddavsnitt
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"   # ungefär varje halvtimme
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - poddar/kallor.txt
+      - .github/scripts/hamta_poddar.py
+      - .github/workflows/poddar.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: poddar
+  cancel-in-progress: false
+
+jobs:
+  hamta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Hämta avsnitt
+        run: python .github/scripts/hamta_poddar.py
+
+      - name: Spara om något ändrats
+        run: |
+          if git diff --quiet -- poddar/avsnitt.json && git ls-files --error-unmatch poddar/avsnitt.json >/dev/null 2>&1; then
+            echo "Inga nya avsnitt."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add poddar/avsnitt.json
+          git commit -m "Nya poddavsnitt"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && break
+            sleep 5
+          done

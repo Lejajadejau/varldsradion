@@ -299,9 +299,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   const castBtn=$('cast');
   if(window.WebKitPlaybackTargetAvailabilityEvent){
     // Safari: visa knappen när det finns AirPlay-mottagare i närheten
-    ljud.addEventListener('webkitplaybacktargetavailabilitychanged',e=>{ castBtn.hidden = e.availability!=='available' });
+    // iPhone meddelar inte alltid när mottagare finns, så knappen visas alltid här
+    castBtn.hidden=false;
     ljud.addEventListener('webkitcurrentplaybacktargetiswirelesschanged',()=>{ castBtn.classList.toggle('on',!!ljud.webkitCurrentPlaybackTargetIsWireless) });
-    castBtn.onclick=()=>{ try{ ljud.webkitShowPlaybackTargetPicker() }catch(e){} };
+    castBtn.onclick=()=>{
+      if(!ljud.getAttribute('src') && aktuell) ljud.src=aktuell.url_resolved||aktuell.url;
+      try{ ljud.webkitShowPlaybackTargetPicker() }catch(e){}
+    };
   } else {
     // Reserv: webbläsarens inbyggda fjärruppspelning, tills Googles Cast-stöd har laddats
     if(ljud.remote && ljud.remote.watchAvailability){

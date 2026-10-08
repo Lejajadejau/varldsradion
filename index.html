@@ -75,7 +75,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   <header>
     <div>
       <h1>Världsradion</h1>
-      <div class="sub">Radio från hela världen, direkt från kanalen · version 6</div>
+      <div class="sub">Radio från hela världen, direkt från kanalen · version 7</div>
     </div>
     <div class="tabs" role="tablist">
       <button id="tabSok" role="tab" aria-selected="true">Sök</button>
@@ -125,6 +125,21 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
 <script>
 (function(){
   const $ = id => document.getElementById(id);
+
+  // ---- automatisk uppdatering ----
+  // Hemskärmsappen på iPhone sparar gamla versioner. Hämta sidan förbi minnet
+  // och ladda om om det finns en nyare version.
+  const APP_VERSION=7;
+  function kollaUppdatering(){
+    fetch(location.pathname+'?kolla='+Date.now(),{cache:'no-store'})
+      .then(r=>r.ok?r.text():'')
+      .then(t=>{
+        const m=t.match(/APP_VERSION=(\d+)/);
+        if(m && +m[1]>APP_VERSION && ljud.paused) location.replace(location.pathname+'?v='+m[1]);
+      }).catch(()=>{});
+  }
+  setTimeout(kollaUppdatering,1500);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) kollaUppdatering() });
   const ljud = $('ljud');
   const regionNamn = (()=>{ try{ const d=new Intl.DisplayNames(['sv'],{type:'region'}); return c=>{ try{return d.of(c)}catch(e){return c} }; }catch(e){ return c=>c } })();
   const SNABB = [['FR','Frankrike'],['IT','Italien'],['ES','Spanien'],['GB','Storbritannien'],['DE','Tyskland'],['US','USA'],['GR','Grekland'],['IE','Irland']];

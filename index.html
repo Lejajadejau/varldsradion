@@ -75,7 +75,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   <header>
     <div>
       <h1>Världsradion</h1>
-      <div class="sub">Radio från hela världen, direkt från kanalen</div>
+      <div class="sub">Radio från hela världen, direkt från kanalen · version 6</div>
     </div>
     <div class="tabs" role="tablist">
       <button id="tabSok" role="tab" aria-selected="true">Sök</button>
@@ -345,6 +345,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   });
   document.addEventListener('click',()=>{ sovMeny.hidden=true });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') sovMeny.hidden=true });
+  // iPhone pausar ofta sidans klocka när skärmen är låst, men ljudet skickar
+  // fortfarande signaler medan det spelar – kontrollera tiden vid varje sådan
+  ljud.addEventListener('timeupdate',()=>{ if(sovSlut && Date.now()>=sovSlut) sovKlar() });
   // om telefonen har sovit en stund: kontrollera direkt när sidan vaknar
   document.addEventListener('visibilitychange',()=>{ if(sovSlut && Date.now()>=sovSlut) sovKlar(); else sovVisa() });
 

@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14232e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Världsradion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: en kolumn med sökpanel överst, kanallista, fast spelare längst ner som en gammal radioskala */
+:root{
+  --bg:#f3f1ec; --surface:#fffdf8; --fg:#1c2329; --muted:#66707a; --line:#dcd8cf;
+  --accent:#c2410c; --accent-fg:#fff; --dial:#14232e; --dial-fg:#f2e9d8; --dial-glow:#f5b041;
+  --display:"Fraunces",Georgia,serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#12171b; --surface:#1a2127; --fg:#e8e4dc; --muted:#98a2ab; --line:#2b343c;
+  --accent:#f0743a; --accent-fg:#1a0e06; --dial:#0b1116; --dial-fg:#f2e9d8; --dial-glow:#f5b041; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--body);padding:0 16px calc(110px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:760px;margin:0 auto}
+header{padding-block:calc(20px + env(safe-area-inset-top,0px)) 12px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font:600 28px/1.1 var(--display);margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
+.tabs button{border:0;background:none;color:var(--muted);font:500 14px var(--body);padding:6px 14px;border-radius:999px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+.search{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-block:8px 10px}
+.search input,.search select{width:100%;font:15px var(--body);padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg)}
+.search .full{grid-column:1/-1}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:13px var(--body);padding:5px 11px;border-radius:999px;cursor:pointer}
+.chip.on{border-color:var(--accent);color:var(--accent)}
+.status{color:var(--muted);font-size:13px;margin-block:6px;min-height:20px}
+ul{list-style:none;margin:0;padding:0}
+li.st{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+li.st:hover{background:color-mix(in srgb,var(--surface) 70%,transparent)}
+li.st.playing .nm{color:var(--accent)}
+.logo{width:44px;height:44px;border-radius:8px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;font:600 15px var(--display);color:var(--muted)}
+.logo img{width:100%;height:100%;object-fit:cover}
+.meta{min-width:0}
+.nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.info{font:12px var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fav{border:0;background:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer;padding:6px}
+.fav.on{color:var(--accent)}
+.player{position:fixed;left:0;right:0;bottom:0;background:var(--dial);color:var(--dial-fg);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.player .in{max-width:760px;margin:0 auto;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center}
+.pp{width:52px;height:52px;border-radius:50%;border:0;background:var(--dial-glow);color:#1b1206;font-size:20px;cursor:pointer;display:grid;place-items:center}
+.pp:disabled{opacity:.4;cursor:default}
+.now{min-width:0}
+.now .t{font:600 16px var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now .s{font:12px var(--mono);color:color-mix(in srgb,var(--dial-fg) 65%,transparent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vol{width:90px;accent-color:var(--dial-glow)}
+.empty{padding:30px 4px;color:var(--muted)}
+button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:480px){.vol{display:none}.player .in{grid-template-columns:auto 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Världsradion</h1>
+      <div class="sub">Radio från hela världen, direkt från kanalen</div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button id="tabSok" role="tab" aria-selected="true">Sök</button>
+      <button id="tabFav" role="tab" aria-selected="false">Favoriter</button>
+    </div>
+  </header>
+
+  <section id="sokPanel">
+    <div class="search">
+      <input id="q" class="full" type="search" placeholder="Kanalens namn, t.ex. France Inter" autocomplete="off">
+      <select id="land"><option value="">Alla länder</option></select>
+      <input id="genre" type="search" placeholder="Genre, t.ex. jazz" autocomplete="off">
+    </div>
+    <div class="chips" id="snabb"></div>
+  </section>
+
+  <div class="status" id="status">Hämtar kanaler …</div>
+  <ul id="lista"></ul>
+</div>
+
+<div class="player">
+  <div class="in">
+    <button class="pp" id="pp" disabled aria-label="Spela">▶</button>
+    <div class="now"><div class="t" id="nuNamn">Ingen kanal vald</div><div class="s" id="nuInfo">Tryck på en kanal för att lyssna</div></div>
+    <input class="vol" id="vol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volym">
+  </div>
+</div>
+<audio id="ljud" preload="none"></audio>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const ljud = $('ljud');
+  const regionNamn = (()=>{ try{ const d=new Intl.DisplayNames(['sv'],{type:'region'}); return c=>{ try{return d.of(c)}catch(e){return c} }; }catch(e){ return c=>c } })();
+  const SNABB = [['FR','Frankrike'],['IT','Italien'],['ES','Spanien'],['GB','Storbritannien'],['DE','Tyskland'],['US','USA'],['GR','Grekland'],['IE','Irland']];
+
+  let servrar = ['https://de1.api.radio-browser.info','https://fi1.api.radio-browser.info','https://de2.api.radio-browser.info'];
+  let aktuell = null, visarFav = false, senaste = [];
+
+  // ---- favoriter (sparas i webbläsaren) ----
+  function hamtaFav(){ try{ return JSON.parse(localStorage.getItem('varldsradion-fav')||'[]') }catch(e){ return [] } }
+  function sparaFav(f){ try{ localStorage.setItem('varldsradion-fav',JSON.stringify(f)) }catch(e){} }
+  let fav = hamtaFav();
+  const arFav = id => fav.some(s=>s.stationuuid===id);
+
+  // ---- API ----
+  async function api(path){
+    let fel;
+    for(const s of servrar){
+      try{
+        const r = await fetch(s+path,{headers:{'Accept':'application/json'}});
+        if(r.ok) return await r.json();
+        fel = new Error('HTTP '+r.status);
+      }catch(e){ fel = e }
+    }
+    throw fel;
+  }
+
+  async function laddaLander(){
+    try{
+      const l = await api('/json/countries?hidebroken=true&order=stationcount&reverse=true');
+      const sel = $('land');
+      l.filter(x=>x.iso_3166_1 && x.stationcount>4)
+       .map(x=>({k:x.iso_3166_1.toUpperCase(), n:regionNamn(x.iso_3166_1.toUpperCase()), c:x.stationcount}))
+       .sort((a,b)=>a.n.localeCompare(b.n,'sv'))
+       .forEach(x=>{ const o=document.createElement('option'); o.value=x.k; o.textContent=`${x.n} (${x.c})`; sel.appendChild(o) });
+    }catch(e){}
+  }
+
+  function byggSnabb(){
+    const box=$('snabb');
+    SNABB.forEach(([k,n])=>{
+      const b=document.createElement('button'); b.className='chip'; b.textContent=n; b.dataset.k=k;
+      b.onclick=()=>{
+        const sel=$('land');
+        if(![...sel.options].some(o=>o.value===k)){ const o=document.createElement('option'); o.value=k; o.textContent=n; sel.appendChild(o) }
+        sel.value = sel.value===k ? '' : k; sok();
+      };
+      box.appendChild(b);
+    });
+  }
+  function markeraSnabb(){ document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.k===$('land').value)) }
+
+  let sokNr=0;
+  async function sok(){
+    markeraSnabb();
+    const nr=++sokNr;
+    const p=new URLSearchParams({hidebroken:'true',order:'clickcount',reverse:'true',limit:'80'});
+    const q=$('q').value.trim(), land=$('land').value, genre=$('genre').value.trim().toLowerCase();
+    if(q) p.set('name',q);
+    if(land) p.set('countrycode',land);
+    if(genre) p.set('tag',genre);
+    $('status').textContent='Söker …';
+    try{
+      let res = await api('/json/stations/search?'+p);
+      if(nr!==sokNr) return;
+      // ta bort dubbletter med samma namn
+      const sett=new Set(); res=res.filter(s=>{const k=(s.name||'').trim().toLowerCase(); if(!k||sett.has(k))return false; sett.add(k); return true});
+      senaste=res;
+      if(!visarFav) visa(res, res.length ? `${res.length} kanaler` : 'Inga kanaler hittades. Prova ett annat namn eller land.');
+    }catch(e){
+      if(nr===sokNr && !visarFav) visa([], 'Kunde inte nå kanaldatabasen. Kontrollera nätet och försök igen.');
+    }
+  }
+
+  function info(s){
+    const delar=[];
+    if(s.countrycode) delar.push(regionNamn(s.countrycode.toUpperCase()));
+    const tags=(s.tags||'').split(',').map(t=>t.trim()).filter(Boolean).slice(0,3);
+    if(tags.length) delar.push(tags.join(', '));
+    if(s.bitrate) delar.push(s.bitrate+' kbps');
+    return delar.join(' · ');
+  }
+
+  function visa(stationer, statustext){
+    $('status').textContent=statustext||'';
+    const ul=$('lista'); ul.innerHTML='';
+    if(!stationer.length && visarFav){
+      ul.innerHTML='<li class="empty">Inga favoriter än. Tryck på stjärnan vid en kanal för att spara den här.</li>';
+      return;
+    }
+    stationer.forEach(s=>{
+      const li=document.createElement('li'); li.className='st'; li.tabIndex=0;
+      if(aktuell && aktuell.stationuuid===s.stationuuid) li.classList.add('playing');
+      const logo=document.createElement('div'); logo.className='logo';
+      logo.textContent=(s.name||'?').trim().charAt(0).toUpperCase();
+      if(s.favicon && /^https:/.test(s.favicon)){
+        const img=new Image(); img.alt=''; img.loading='lazy'; img.referrerPolicy='no-referrer';
+        img.onload=()=>{logo.textContent='';logo.appendChild(img)}; img.src=s.favicon;
+      }
+      const meta=document.createElement('div'); meta.className='meta';
+      const nm=document.createElement('div'); nm.className='nm'; nm.textContent=(s.name||'').trim();
+      const inf=document.createElement('div'); inf.className='info'; inf.textContent=info(s);
+      meta.append(nm,inf);
+      const f=document.createElement('button'); f.className='fav'+(arFav(s.stationuuid)?' on':'');
+      f.textContent=arFav(s.stationuuid)?'★':'☆'; f.setAttribute('aria-label','Favorit');
+      f.onclick=e=>{ e.stopPropagation(); vaxlaFav(s) };
+      li.append(logo,meta,f);
+      li.onclick=()=>spela(s);
+      li.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); spela(s) } };
+      ul.appendChild(li);
+    });
+  }
+
+  function vaxlaFav(s){
+    if(arFav(s.stationuuid)) fav=fav.filter(x=>x.stationuuid!==s.stationuuid);
+    else fav.push({stationuuid:s.stationuuid,name:s.name,url_resolved:s.url_resolved,url:s.url,favicon:s.favicon,countrycode:s.countrycode,tags:s.tags,bitrate:s.bitrate});
+    sparaFav(fav);
+    visarFav ? visa(fav, fav.length?`${fav.length} favoriter`:'') : visa(senaste, $('status').textContent);
+  }
+
+  // ---- spelaren ----
+  function spela(s){
+    aktuell=s;
+    const url=s.url_resolved||s.url;
+    ljud.src=url;
+    $('nuNamn').textContent=(s.name||'').trim();
+    $('nuInfo').textContent='Ansluter …';
+    $('pp').disabled=false;
+    ljud.play().catch(()=>{});
+    document.querySelectorAll('li.st').forEach(li=>li.classList.remove('playing'));
+    visarFav ? visa(fav,$('status').textContent) : visa(senaste,$('status').textContent);
+    // tala om för databasen att kanalen spelades (håller topplistan levande)
+    if(s.stationuuid) api('/json/url/'+s.stationuuid).catch(()=>{});
+    if('mediaSession' in navigator){
+      try{
+        navigator.mediaSession.metadata=new MediaMetadata({title:(s.name||'').trim(),artist:info(s),artwork:s.favicon&&/^https:/.test(s.favicon)?[{src:s.favicon}]:[]});
+        navigator.mediaSession.setActionHandler('play',()=>ljud.play());
+        navigator.mediaSession.setActionHandler('pause',()=>ljud.pause());
+      }catch(e){}
+    }
+  }
+  ljud.addEventListener('playing',()=>{ $('pp').textContent='❚❚'; $('pp').setAttribute('aria-label','Pausa'); if(aktuell) $('nuInfo').textContent=info(aktuell)||'Spelar' });
+  ljud.addEventListener('pause',()=>{ $('pp').textContent='▶'; $('pp').setAttribute('aria-label','Spela') });
+  ljud.addEventListener('waiting',()=>{ $('nuInfo').textContent='Buffrar …' });
+  ljud.addEventListener('error',()=>{ if(aktuell){ $('nuInfo').textContent='Kanalen gick inte att spela just nu. Prova en annan.'; $('pp').textContent='▶' } });
+  $('pp').onclick=()=>{ if(!aktuell) return; if(ljud.paused){ ljud.src=aktuell.url_resolved||aktuell.url; ljud.play().catch(()=>{}) } else { ljud.pause(); ljud.removeAttribute('src'); ljud.load() } };
+  $('vol').oninput=e=>{ ljud.volume=+e.target.value };
+
+  // ---- flikar och sökfält ----
+  function flik(fv){
+    visarFav=fv;
+    $('tabSok').setAttribute('aria-selected',!fv); $('tabFav').setAttribute('aria-selected',fv);
+    $('sokPanel').hidden=fv;
+    fv ? visa(fav, fav.length?`${fav.length} favoriter`:'') : visa(senaste, senaste.length?`${senaste.length} kanaler`:'');
+  }
+  $('tabSok').onclick=()=>flik(false);
+  $('tabFav').onclick=()=>flik(true);
+  let t; const fordrojd=()=>{ clearTimeout(t); t=setTimeout(sok,350) };
+  $('q').addEventListener('input',fordrojd);
+  $('genre').addEventListener('input',fordrojd);
+  $('land').addEventListener('change',sok);
+
+  byggSnabb();
+  laddaLander();
+  if(fav.length){ flik(true); sok() } else { $('land').value=''; sok() }
+})();
+</script>
+</body>
+</html>

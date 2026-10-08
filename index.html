@@ -76,7 +76,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   <header>
     <div>
       <h1>Världsradion</h1>
-      <div class="sub">Radio från hela världen, direkt från kanalen · <a href="poddar/">Poddar</a> · version 8</div>
+      <div class="sub">Radio från hela världen, direkt från kanalen · version 9</div>
     </div>
     <div class="tabs" role="tablist">
       <button id="tabSok" role="tab" aria-selected="true">Sök</button>
@@ -130,7 +130,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   // ---- automatisk uppdatering ----
   // Hemskärmsappen på iPhone sparar gamla versioner. Hämta sidan förbi minnet
   // och ladda om om det finns en nyare version.
-  const APP_VERSION=8;
+  const APP_VERSION=9;
   function kollaUppdatering(){
     fetch(location.pathname+'?kolla='+Date.now(),{cache:'no-store'})
       .then(r=>r.ok?r.text():'')

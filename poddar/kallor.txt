@@ -11,7 +11,7 @@
 # (inom en halvtimme, eller direkt efter att filen sparats).
 
 # Exempel – byt gärna ut
-sök: Ekot Sveriges Radio
-sök: P1 Morgon
-sök: Konflikt Sveriges Radio
-sök: Vetandets värld
+https://public-api.sr.se/rss/ekot-nyhetssandning
+https://public-api.sr.se/rss/p1-morgon
+https://public-api.sr.se/rss/konflikt
+https://public-api.sr.se/rss/vetandets-varld

@@ -55,9 +55,12 @@ li.st.playing .nm{color:var(--accent)}
 .now .t{font:600 16px var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .now .s{font:12px var(--mono);color:color-mix(in srgb,var(--dial-fg) 65%,transparent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vol{width:90px;accent-color:var(--dial-glow)}
+.ctl{display:flex;align-items:center;gap:10px}
+.cast{width:40px;height:40px;border-radius:50%;border:1px solid color-mix(in srgb,var(--dial-fg) 30%,transparent);background:none;color:var(--dial-fg);display:grid;place-items:center;cursor:pointer}
+.cast.on{color:var(--dial-glow);border-color:var(--dial-glow)}
 .empty{padding:30px 4px;color:var(--muted)}
 button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-@media (max-width:480px){.vol{display:none}.player .in{grid-template-columns:auto 1fr}}
+@media (max-width:480px){.vol{display:none}}
 </style>
 </head>
 <body>
@@ -90,10 +93,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   <div class="in">
     <button class="pp" id="pp" disabled aria-label="Spela">▶</button>
     <div class="now"><div class="t" id="nuNamn">Ingen kanal vald</div><div class="s" id="nuInfo">Tryck på en kanal för att lyssna</div></div>
-    <input class="vol" id="vol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volym">
+    <div class="ctl">
+      <button class="cast" id="cast" hidden aria-label="Spela på annan högtalare" title="AirPlay / Cast">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15l5 6H7z" fill="currentColor"/></svg>
+      </button>
+      <input class="vol" id="vol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volym">
+    </div>
   </div>
 </div>
-<audio id="ljud" preload="none"></audio>
+<audio id="ljud" preload="none" x-webkit-airplay="allow"></audio>
 
 <script>
 (function(){
@@ -244,6 +252,20 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   ljud.addEventListener('error',()=>{ if(aktuell){ $('nuInfo').textContent='Kanalen gick inte att spela just nu. Prova en annan.'; $('pp').textContent='▶' } });
   $('pp').onclick=()=>{ if(!aktuell) return; if(ljud.paused){ ljud.src=aktuell.url_resolved||aktuell.url; ljud.play().catch(()=>{}) } else { ljud.pause(); ljud.removeAttribute('src'); ljud.load() } };
   $('vol').oninput=e=>{ ljud.volume=+e.target.value };
+
+  // ---- AirPlay (Safari) och Chromecast (Chrome) ----
+  const cast=$('cast');
+  if(window.WebKitPlaybackTargetAvailabilityEvent){
+    // Safari: visa knappen när det finns AirPlay-mottagare i närheten
+    ljud.addEventListener('webkitplaybacktargetavailabilitychanged',e=>{ cast.hidden = e.availability!=='available' });
+    ljud.addEventListener('webkitcurrentplaybacktargetiswirelesschanged',()=>{ cast.classList.toggle('on',!!ljud.webkitCurrentPlaybackTargetIsWireless) });
+    cast.onclick=()=>{ try{ ljud.webkitShowPlaybackTargetPicker() }catch(e){} };
+  } else if(ljud.remote && ljud.remote.watchAvailability){
+    // Chrome: Remote Playback API för Chromecast
+    ljud.remote.watchAvailability(a=>{ cast.hidden=!a }).catch(()=>{ cast.hidden=false });
+    ['connect','connecting','disconnect'].forEach(ev=>ljud.remote.addEventListener(ev,()=>cast.classList.toggle('on',ljud.remote.state!=='disconnected')));
+    cast.onclick=()=>{ if(!ljud.src && aktuell) ljud.src=aktuell.url_resolved||aktuell.url; ljud.remote.prompt().catch(()=>{}) };
+  }
 
   // ---- flikar och sökfält ----
   function flik(fv){

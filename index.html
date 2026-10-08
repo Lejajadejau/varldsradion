@@ -58,6 +58,13 @@ li.st.playing .nm{color:var(--accent)}
 .ctl{display:flex;align-items:center;gap:10px}
 .cast{width:40px;height:40px;border-radius:50%;border:1px solid color-mix(in srgb,var(--dial-fg) 30%,transparent);background:none;color:var(--dial-fg);display:grid;place-items:center;cursor:pointer}
 .cast.on{color:var(--dial-glow);border-color:var(--dial-glow)}
+.sov{height:40px;min-width:40px;padding:0 10px;border-radius:999px;border:1px solid color-mix(in srgb,var(--dial-fg) 30%,transparent);background:none;color:var(--dial-fg);display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;font:500 13px var(--mono);font-variant-numeric:tabular-nums}
+.sov.on{color:var(--dial-glow);border-color:var(--dial-glow)}
+.sovmeny{position:fixed;right:16px;bottom:calc(88px + env(safe-area-inset-bottom,0px));background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:12px;width:min(280px,calc(100vw - 32px));z-index:10}
+.sovmeny h2{font:600 15px var(--display);margin:0 0 8px}
+.sovval{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.sovval button{border:1px solid var(--line);background:var(--bg);color:var(--fg);font:500 14px var(--body);padding:9px 0;border-radius:10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.sovval button.av{grid-column:1/-1;color:var(--muted)}
 .empty{padding:30px 4px;color:var(--muted)}
 button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:480px){.vol{display:none}}
@@ -94,11 +101,23 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
     <button class="pp" id="pp" disabled aria-label="Spela">▶</button>
     <div class="now"><div class="t" id="nuNamn">Ingen kanal vald</div><div class="s" id="nuInfo">Tryck på en kanal för att lyssna</div></div>
     <div class="ctl">
+      <button class="sov" id="sov" aria-label="Sovtimer" title="Sovtimer">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <span id="sovTid" hidden></span>
+      </button>
       <button class="cast" id="cast" hidden aria-label="Spela på annan högtalare" title="AirPlay / Cast">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15l5 6H7z" fill="currentColor"/></svg>
       </button>
       <input class="vol" id="vol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volym">
     </div>
+  </div>
+</div>
+<div class="sovmeny" id="sovMeny" hidden role="dialog" aria-label="Sovtimer">
+  <h2>Stäng av radion om</h2>
+  <div class="sovval">
+    <button data-min="15">15 min</button><button data-min="30">30 min</button><button data-min="45">45 min</button>
+    <button data-min="60">1 tim</button><button data-min="90">1,5 tim</button><button data-min="120">2 tim</button>
+    <button class="av" data-min="0">Stäng av timern</button>
   </div>
 </div>
 <audio id="ljud" preload="none" x-webkit-airplay="allow"></audio>
@@ -294,6 +313,40 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
   ljud.addEventListener('error',()=>{ if(aktuell && !castar() && ljud.getAttribute('src')){ $('nuInfo').textContent='Kanalen gick inte att spela just nu. Prova en annan.'; setPP(false) } });
   $('pp').onclick=()=>spelaPaus();
   $('vol').oninput=e=>{ ljud.volume=+e.target.value; if(castar() && remoteCtl){ remote.volumeLevel=+e.target.value; remoteCtl.setVolumeLevel() } };
+
+
+  // ---- sovtimer ----
+  let sovSlut=0, sovKlocka=null;
+  const sovBtn=$('sov'), sovMeny=$('sovMeny'), sovTid=$('sovTid');
+  function sovVisa(){
+    if(!sovSlut){ sovTid.hidden=true; sovBtn.classList.remove('on'); sovBtn.setAttribute('aria-label','Sovtimer'); return }
+    const kvar=Math.max(0,sovSlut-Date.now()), min=Math.ceil(kvar/60000);
+    sovTid.hidden=false; sovTid.textContent=min+' min';
+    sovBtn.classList.add('on'); sovBtn.setAttribute('aria-label','Sovtimer, '+min+' minuter kvar');
+  }
+  function sovStall(min){
+    clearInterval(sovKlocka); sovKlocka=null; sovSlut=0;
+    if(min>0){
+      sovSlut=Date.now()+min*60000;
+      sovKlocka=setInterval(()=>{ if(Date.now()>=sovSlut) sovKlar(); else sovVisa() },1000);
+    }
+    sovVisa();
+  }
+  function sovKlar(){
+    sovStall(0);
+    spelaPaus(false);
+    if(aktuell) $('nuInfo').textContent='Sovtimern stängde av radion. God natt!';
+  }
+  sovBtn.onclick=e=>{ e.stopPropagation(); sovMeny.hidden=!sovMeny.hidden };
+  sovMeny.addEventListener('click',e=>{
+    e.stopPropagation();
+    const b=e.target.closest('button[data-min]'); if(!b) return;
+    sovStall(+b.dataset.min); sovMeny.hidden=true;
+  });
+  document.addEventListener('click',()=>{ sovMeny.hidden=true });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') sovMeny.hidden=true });
+  // om telefonen har sovit en stund: kontrollera direkt när sidan vaknar
+  document.addEventListener('visibilitychange',()=>{ if(sovSlut && Date.now()>=sovSlut) sovKlar(); else sovVisa() });
 
   // ---- AirPlay (Safari) och Google Cast (Chrome) ----
   const castBtn=$('cast');

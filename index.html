@@ -220,51 +220,128 @@ button:focus-visible,input:focus-visible,select:focus-visible,li.st:focus-visibl
 
   function vaxlaFav(s){
     if(arFav(s.stationuuid)) fav=fav.filter(x=>x.stationuuid!==s.stationuuid);
-    else fav.push({stationuuid:s.stationuuid,name:s.name,url_resolved:s.url_resolved,url:s.url,favicon:s.favicon,countrycode:s.countrycode,tags:s.tags,bitrate:s.bitrate});
+    else fav.push({stationuuid:s.stationuuid,name:s.name,url_resolved:s.url_resolved,url:s.url,favicon:s.favicon,countrycode:s.countrycode,tags:s.tags,bitrate:s.bitrate,codec:s.codec,hls:s.hls});
     sparaFav(fav);
     visarFav ? visa(fav, fav.length?`${fav.length} favoriter`:'') : visa(senaste, $('status').textContent);
   }
 
   // ---- spelaren ----
+  let castSession=null, remote=null, remoteCtl=null;
+  const castar=()=>!!castSession;
+  const enhet=()=>{ try{ return castSession.getCastDevice().friendlyName }catch(e){ return 'högtalaren' } };
+  function setPP(spelar){ $('pp').textContent=spelar?'❚❚':'▶'; $('pp').setAttribute('aria-label',spelar?'Pausa':'Spela') }
+
+  function spelaLokalt(s){
+    ljud.src=s.url_resolved||s.url;
+    ljud.play().catch(()=>{});
+  }
+  function stoppaLokalt(){ ljud.pause(); ljud.removeAttribute('src'); ljud.load() }
+
+  function mime(s){
+    if(s.hls==1 || /\.m3u8(\?|$)/i.test(s.url_resolved||'')) return 'application/x-mpegurl';
+    const c=(s.codec||'').toUpperCase();
+    if(c.startsWith('AAC')) return 'audio/aac';
+    if(c==='OGG'||c==='VORBIS'||c==='OPUS') return 'audio/ogg';
+    if(c==='FLAC') return 'audio/flac';
+    return 'audio/mpeg';
+  }
+  function castLadda(s){
+    const mi=new chrome.cast.media.MediaInfo(s.url_resolved||s.url, mime(s));
+    mi.streamType=chrome.cast.media.StreamType.LIVE;
+    const md=new chrome.cast.media.MusicTrackMediaMetadata();
+    md.title=(s.name||'').trim(); md.artist=info(s);
+    if(s.favicon && /^https:/.test(s.favicon)) md.images=[new chrome.cast.Image(s.favicon)];
+    mi.metadata=md;
+    const req=new chrome.cast.media.LoadRequest(mi); req.autoplay=true;
+    $('nuInfo').textContent='Ansluter på '+enhet()+' …';
+    castSession.loadMedia(req).then(
+      ()=>{ $('nuInfo').textContent='Spelar på '+enhet(); setPP(true) },
+      ()=>{ $('nuInfo').textContent=enhet()+' kunde inte spela kanalen. Prova en annan.'; setPP(false) }
+    );
+  }
+
   function spela(s){
     aktuell=s;
-    const url=s.url_resolved||s.url;
-    ljud.src=url;
     $('nuNamn').textContent=(s.name||'').trim();
     $('nuInfo').textContent='Ansluter …';
     $('pp').disabled=false;
-    ljud.play().catch(()=>{});
-    document.querySelectorAll('li.st').forEach(li=>li.classList.remove('playing'));
+    castar() ? castLadda(s) : spelaLokalt(s);
     visarFav ? visa(fav,$('status').textContent) : visa(senaste,$('status').textContent);
     // tala om för databasen att kanalen spelades (håller topplistan levande)
     if(s.stationuuid) api('/json/url/'+s.stationuuid).catch(()=>{});
     if('mediaSession' in navigator){
       try{
         navigator.mediaSession.metadata=new MediaMetadata({title:(s.name||'').trim(),artist:info(s),artwork:s.favicon&&/^https:/.test(s.favicon)?[{src:s.favicon}]:[]});
-        navigator.mediaSession.setActionHandler('play',()=>ljud.play());
-        navigator.mediaSession.setActionHandler('pause',()=>ljud.pause());
+        navigator.mediaSession.setActionHandler('play',()=>spelaPaus(true));
+        navigator.mediaSession.setActionHandler('pause',()=>spelaPaus(false));
       }catch(e){}
     }
   }
-  ljud.addEventListener('playing',()=>{ $('pp').textContent='❚❚'; $('pp').setAttribute('aria-label','Pausa'); if(aktuell) $('nuInfo').textContent=info(aktuell)||'Spelar' });
-  ljud.addEventListener('pause',()=>{ $('pp').textContent='▶'; $('pp').setAttribute('aria-label','Spela') });
-  ljud.addEventListener('waiting',()=>{ $('nuInfo').textContent='Buffrar …' });
-  ljud.addEventListener('error',()=>{ if(aktuell){ $('nuInfo').textContent='Kanalen gick inte att spela just nu. Prova en annan.'; $('pp').textContent='▶' } });
-  $('pp').onclick=()=>{ if(!aktuell) return; if(ljud.paused){ ljud.src=aktuell.url_resolved||aktuell.url; ljud.play().catch(()=>{}) } else { ljud.pause(); ljud.removeAttribute('src'); ljud.load() } };
-  $('vol').oninput=e=>{ ljud.volume=+e.target.value };
+  function spelaPaus(vill){
+    if(!aktuell) return;
+    if(castar()){
+      const igang = remote && remote.isMediaLoaded && !remote.isPaused;
+      if(vill===undefined) vill=!igang;
+      if(vill) castLadda(aktuell); else if(remoteCtl) remoteCtl.stop();
+      return;
+    }
+    if(vill===undefined) vill=ljud.paused;
+    vill ? spelaLokalt(aktuell) : stoppaLokalt();
+  }
+  ljud.addEventListener('playing',()=>{ if(castar())return; setPP(true); if(aktuell) $('nuInfo').textContent=info(aktuell)||'Spelar' });
+  ljud.addEventListener('pause',()=>{ if(!castar()) setPP(false) });
+  ljud.addEventListener('waiting',()=>{ if(!castar()) $('nuInfo').textContent='Buffrar …' });
+  ljud.addEventListener('error',()=>{ if(aktuell && !castar() && ljud.getAttribute('src')){ $('nuInfo').textContent='Kanalen gick inte att spela just nu. Prova en annan.'; setPP(false) } });
+  $('pp').onclick=()=>spelaPaus();
+  $('vol').oninput=e=>{ ljud.volume=+e.target.value; if(castar() && remoteCtl){ remote.volumeLevel=+e.target.value; remoteCtl.setVolumeLevel() } };
 
-  // ---- AirPlay (Safari) och Chromecast (Chrome) ----
-  const cast=$('cast');
+  // ---- AirPlay (Safari) och Google Cast (Chrome) ----
+  const castBtn=$('cast');
   if(window.WebKitPlaybackTargetAvailabilityEvent){
     // Safari: visa knappen när det finns AirPlay-mottagare i närheten
-    ljud.addEventListener('webkitplaybacktargetavailabilitychanged',e=>{ cast.hidden = e.availability!=='available' });
-    ljud.addEventListener('webkitcurrentplaybacktargetiswirelesschanged',()=>{ cast.classList.toggle('on',!!ljud.webkitCurrentPlaybackTargetIsWireless) });
-    cast.onclick=()=>{ try{ ljud.webkitShowPlaybackTargetPicker() }catch(e){} };
-  } else if(ljud.remote && ljud.remote.watchAvailability){
-    // Chrome: Remote Playback API för Chromecast
-    ljud.remote.watchAvailability(a=>{ cast.hidden=!a }).catch(()=>{ cast.hidden=false });
-    ['connect','connecting','disconnect'].forEach(ev=>ljud.remote.addEventListener(ev,()=>cast.classList.toggle('on',ljud.remote.state!=='disconnected')));
-    cast.onclick=()=>{ if(!ljud.src && aktuell) ljud.src=aktuell.url_resolved||aktuell.url; ljud.remote.prompt().catch(()=>{}) };
+    ljud.addEventListener('webkitplaybacktargetavailabilitychanged',e=>{ castBtn.hidden = e.availability!=='available' });
+    ljud.addEventListener('webkitcurrentplaybacktargetiswirelesschanged',()=>{ castBtn.classList.toggle('on',!!ljud.webkitCurrentPlaybackTargetIsWireless) });
+    castBtn.onclick=()=>{ try{ ljud.webkitShowPlaybackTargetPicker() }catch(e){} };
+  } else {
+    // Reserv: webbläsarens inbyggda fjärruppspelning, tills Googles Cast-stöd har laddats
+    if(ljud.remote && ljud.remote.watchAvailability){
+      ljud.remote.watchAvailability(a=>{ castBtn.hidden=!a }).catch(()=>{});
+      castBtn.onclick=()=>{ if(!ljud.getAttribute('src') && aktuell) ljud.src=aktuell.url_resolved||aktuell.url; ljud.remote.prompt().catch(()=>{}) };
+    }
+    window['__onGCastApiAvailable']=function(ok){
+      if(!ok || !window.cast || !cast.framework) return;
+      try{ ljud.remote && ljud.remote.cancelWatchAvailability && ljud.remote.cancelWatchAvailability().catch(()=>{}) }catch(e){}
+      const ctx=cast.framework.CastContext.getInstance();
+      ctx.setOptions({receiverApplicationId:chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID, autoJoinPolicy:chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED});
+      remote=new cast.framework.RemotePlayer();
+      remoteCtl=new cast.framework.RemotePlayerController(remote);
+      const visaLage=st=>{ castBtn.hidden = st===cast.framework.CastState.NO_DEVICES_AVAILABLE; castBtn.classList.toggle('on', st===cast.framework.CastState.CONNECTED) };
+      visaLage(ctx.getCastState());
+      ctx.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED,e=>visaLage(e.castState));
+      ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED,e=>{
+        const S=cast.framework.SessionState;
+        if(e.sessionState===S.SESSION_STARTED || e.sessionState===S.SESSION_RESUMED){
+          castSession=ctx.getCurrentSession();
+          const lat=!ljud.paused; stoppaLokalt();
+          if(aktuell && (lat || e.sessionState===S.SESSION_STARTED)) castLadda(aktuell);
+          else $('nuInfo').textContent='Ansluten till '+enhet();
+        } else if(e.sessionState===S.SESSION_ENDED){
+          castSession=null; setPP(false);
+          if(aktuell) $('nuInfo').textContent='Castningen avslutades. Tryck ▶ för att lyssna här.';
+        }
+      });
+      remoteCtl.addEventListener(cast.framework.RemotePlayerEventType.PLAYER_STATE_CHANGED,()=>{
+        if(!castar()) return;
+        const st=remote.playerState;
+        if(st==='BUFFERING') $('nuInfo').textContent='Buffrar på '+enhet()+' …';
+        else if(st==='PLAYING'){ setPP(true); $('nuInfo').textContent='Spelar på '+enhet() }
+        else if(st==='IDLE' || st==='PAUSED' || st==null) setPP(false);
+      });
+      castBtn.onclick=()=>{ ctx.requestSession().catch(()=>{}) };
+    };
+    const sc=document.createElement('script');
+    sc.src='https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+    sc.async=true; document.head.appendChild(sc);
   }
 
   // ---- flikar och sökfält ----
